@@ -27,11 +27,32 @@ try {
   http.Server.prototype.listen = origListen;
 }
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
+  if ((req.url || '').startsWith('/__debug')) {
+    const out = { appLoaded: !!app };
+    for (const k of ['LK21_URL', 'ND_URL']) {
+      const u = process.env[k];
+      out[k] = u || null;
+      if (!u) { out[k + '_tes'] = 'env belum diisi'; continue; }
+      try {
+        const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 13) Chrome/124 Mobile Safari/537.36' }, redirect: 'follow' });
+        const t = await r.text();
+        out[k + '_tes'] = {
+          status: r.status, urlAkhir: r.url, server: r.headers.get('server'),
+          tantanganCloudflare: /just a moment|cf-chl|challenge-platform|attention required/i.test(t),
+          cuplikan: t.replace(/\s+/g, ' ').slice(0, 160)
+        };
+      } catch (e) { out[k + '_tes'] = 'gagal: ' + ((e.cause && (e.cause.code || e.cause.message)) || e.message); }
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return res.end(JSON.stringify(out, null, 1));
+  }
   if (!app) {
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.end(JSON.stringify({ error: 'lk21-api gagal dimuat', detail: String((err && (err.stack || err.message)) || 'app Express tidak ditemukan').slice(0, 900) }));
   }
+  return app(req, res);
+};
   return app(req, res);
 };
